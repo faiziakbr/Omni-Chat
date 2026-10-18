@@ -149,6 +149,17 @@ class WebRtcService {
     if (tracks.isNotEmpty) await Helper.switchCamera(tracks.first);
   }
 
+  /// Routes call audio to the loudspeaker or the earpiece. Mobile only; a
+  /// connected headset still wins when the speaker is off.
+  Future<void> setSpeakerOn(bool on) async {
+    if (kIsWeb) return;
+    try {
+      await Helper.setSpeakerphoneOn(on);
+    } catch (e) {
+      debugPrint('setSpeakerphoneOn failed: $e');
+    }
+  }
+
   /// Stops all media and closes the connection. Safe to call repeatedly.
   Future<void> close() async {
     final pc = _pc;

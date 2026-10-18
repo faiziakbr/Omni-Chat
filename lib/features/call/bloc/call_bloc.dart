@@ -67,6 +67,7 @@ class CallBloc extends Bloc<CallEvent, CallState> {
     CallMicToggled() => _onMicToggled(emit),
     CallCameraToggled() => _onCameraToggled(emit),
     CallCameraSwitched() => _webRtc.switchCamera(),
+    CallSpeakerToggled() => _onSpeakerToggled(emit),
     _IncomingChanged(:final incoming) => _onIncoming(incoming, emit),
     _CallDocChanged(:final doc) => _onDocChanged(doc, emit),
     _RemoteCandidateReceived(:final candidate) => _webRtc.addRemoteCandidate(candidate),
@@ -103,6 +104,7 @@ class CallBloc extends Bloc<CallEvent, CallState> {
     );
     try {
       final local = await _webRtc.openMedia();
+      await _webRtc.setSpeakerOn(state.speakerOn);
       emit(state.copyWith(localStream: local));
 
       final callId = await _signaling.createCall(peer);
@@ -174,6 +176,7 @@ class CallBloc extends Bloc<CallEvent, CallState> {
 
     try {
       final local = await _webRtc.openMedia();
+      await _webRtc.setSpeakerOn(state.speakerOn);
       emit(state.copyWith(localStream: local));
       await _webRtc.createPeer();
 
@@ -270,6 +273,8 @@ class CallBloc extends Bloc<CallEvent, CallState> {
         _disconnectTimer?.cancel();
         if (state.phase != CallPhase.active) {
           await _ringer.connected();
+          // The OS can re-route audio when the call goes live; re-apply.
+          await _webRtc.setSpeakerOn(state.speakerOn);
           emit(
             state.copyWith(
               phase: CallPhase.active,
@@ -321,6 +326,12 @@ class CallBloc extends Bloc<CallEvent, CallState> {
     if (!state.inCall) return;
     _webRtc.setCameraEnabled(!state.cameraOn);
     emit(state.copyWith(cameraOn: !state.cameraOn));
+  }
+
+  Future<void> _onSpeakerToggled(Emitter<CallState> emit) async {
+    if (!state.inCall) return;
+    await _webRtc.setSpeakerOn(!state.speakerOn);
+    emit(state.copyWith(speakerOn: !state.speakerOn));
   }
 
   Future<void> _onReset(Emitter<CallState> emit) async {

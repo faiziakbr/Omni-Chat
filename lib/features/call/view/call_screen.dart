@@ -312,6 +312,14 @@ class _Controls extends StatelessWidget {
             ),
             if (!kIsWeb)
               _RoundButton(
+                icon: state.speakerOn ? Icons.volume_up : Icons.phone_in_talk,
+                label: state.speakerOn ? 'Speaker' : 'Earpiece',
+                color: state.speakerOn ? Colors.white24 : Colors.white,
+                iconColor: state.speakerOn ? Colors.white : Colors.black,
+                onPressed: () => bloc.add(const CallSpeakerToggled()),
+              ),
+            if (!kIsWeb)
+              _RoundButton(
                 icon: Icons.cameraswitch,
                 label: 'Flip',
                 color: Colors.white24,

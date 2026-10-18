@@ -26,6 +26,7 @@ final class CallState extends Equatable {
     this.remoteStream,
     this.micOn = true,
     this.cameraOn = true,
+    this.speakerOn = true,
     this.reconnecting = false,
     this.connectedAt,
     this.endReason,
@@ -41,6 +42,9 @@ final class CallState extends Equatable {
   final MediaStream? remoteStream;
   final bool micOn;
   final bool cameraOn;
+
+  /// Loudspeaker vs earpiece (mobile). Video calls start on the speaker.
+  final bool speakerOn;
   final bool reconnecting;
   final DateTime? connectedAt;
   final CallEndReason? endReason;
@@ -56,6 +60,7 @@ final class CallState extends Equatable {
     MediaStream? remoteStream,
     bool? micOn,
     bool? cameraOn,
+    bool? speakerOn,
     bool? reconnecting,
     DateTime? connectedAt,
   }) => CallState(
@@ -68,6 +73,7 @@ final class CallState extends Equatable {
     remoteStream: remoteStream ?? this.remoteStream,
     micOn: micOn ?? this.micOn,
     cameraOn: cameraOn ?? this.cameraOn,
+    speakerOn: speakerOn ?? this.speakerOn,
     reconnecting: reconnecting ?? this.reconnecting,
     connectedAt: connectedAt ?? this.connectedAt,
     endReason: endReason,
@@ -85,6 +91,7 @@ final class CallState extends Equatable {
     remoteStream,
     micOn,
     cameraOn,
+    speakerOn,
     reconnecting,
     connectedAt,
     endReason,

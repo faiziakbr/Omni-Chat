@@ -83,6 +83,7 @@ void main() {
     when(() => webRtc.acceptAnswer(any())).thenAnswer((_) async {});
     when(() => webRtc.hasRemoteDescription).thenReturn(false);
     when(() => webRtc.close()).thenAnswer((_) async {});
+    when(() => webRtc.setSpeakerOn(any())).thenAnswer((_) async {});
 
     when(() => ringer.actions).thenAnswer((_) => ringerActions.stream);
     when(() => ringer.startRingback()).thenAnswer((_) async {});
@@ -487,6 +488,59 @@ void main() {
         verify(() => signaling.setStatus('c1', CallStatus.ended)).called(1);
         verify(() => ringer.ended()).called(1);
       },
+    );
+  });
+
+  group('speaker', () {
+    blocTest<CallBloc, CallState>(
+      'starts on the speaker and re-applies it when the call connects',
+      build: build,
+      act: (b) async {
+        b.add(CallStarted(bob));
+        await Future<void>.delayed(Duration.zero);
+        callDoc.add(doc(status: CallStatus.accepted, ans: answer));
+        await Future<void>.delayed(Duration.zero);
+        peerStates.add(PeerState.connected);
+      },
+      skip: 4,
+      expect: () => [
+        isA<CallState>()
+            .having((s) => s.phase, 'phase', CallPhase.active)
+            .having((s) => s.speakerOn, 'speakerOn', true),
+      ],
+      verify: (_) => verify(() => webRtc.setSpeakerOn(true)).called(2),
+    );
+
+    blocTest<CallBloc, CallState>(
+      'toggling switches between speaker and earpiece',
+      build: build,
+      act: (b) async {
+        b.add(CallStarted(bob));
+        await Future<void>.delayed(Duration.zero);
+        b
+          ..add(const CallSpeakerToggled())
+          ..add(const CallSpeakerToggled());
+      },
+      skip: 3,
+      expect: () => [
+        isA<CallState>().having((s) => s.speakerOn, 'speakerOn', false),
+        isA<CallState>().having((s) => s.speakerOn, 'speakerOn', true),
+      ],
+      verify: (_) {
+        verifyInOrder([
+          () => webRtc.setSpeakerOn(true),
+          () => webRtc.setSpeakerOn(false),
+          () => webRtc.setSpeakerOn(true),
+        ]);
+      },
+    );
+
+    blocTest<CallBloc, CallState>(
+      'ignored when there is no call',
+      build: build,
+      act: (b) => b.add(const CallSpeakerToggled()),
+      expect: () => <CallState>[],
+      verify: (_) => verifyNever(() => webRtc.setSpeakerOn(any())),
     );
   });
 

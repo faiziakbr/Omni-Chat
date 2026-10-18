@@ -42,6 +42,10 @@ final class CallCameraSwitched extends CallEvent {
   const CallCameraSwitched();
 }
 
+final class CallSpeakerToggled extends CallEvent {
+  const CallSpeakerToggled();
+}
+
 // ---- internal ----
 
 final class _IncomingChanged extends CallEvent {
