@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/theme.dart';
 import '../../../core/time_format.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../call/bloc/call_bloc.dart';
 import '../../connectivity/bloc/connectivity_bloc.dart';
@@ -39,7 +41,10 @@ class ChatView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
+      backgroundColor: Color.alphaBlend(scheme.primary.withValues(alpha: 0.035), scheme.surface),
       appBar: AppBar(
         titleSpacing: 0,
         title: BlocBuilder<ChatBloc, ChatState>(
@@ -48,16 +53,24 @@ class ChatView extends StatelessWidget {
             final online = state.peerPresence.online;
             return Row(
               children: [
-                UserAvatar(name: state.peer?.name ?? '', online: online, radius: 18),
+                UserAvatar(name: state.peer?.name ?? '', online: online, radius: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(state.peer?.name ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        state.peer?.name ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium,
+                      ),
                       Text(
                         online ? 'online' : formatLastSeen(state.peerPresence.lastSeen),
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: online ? AppTheme.online : scheme.onSurfaceVariant,
+                          fontWeight: online ? FontWeight.w600 : null,
+                        ),
                       ),
                     ],
                   ),
@@ -66,7 +79,7 @@ class ChatView extends StatelessWidget {
             );
           },
         ),
-        actions: const [_VideoCallButton(), SizedBox(width: 8)],
+        actions: const [_VideoCallButton(), SizedBox(width: 12)],
       ),
       body: SafeArea(
         child: Center(
@@ -93,9 +106,9 @@ class _VideoCallButton extends StatelessWidget {
     final peer = context.select((ChatBloc b) => b.state.peer);
     final busy = context.select((CallBloc b) => b.state.inCall);
     final offline = context.select((ConnectivityBloc b) => b.state.isOffline);
-    return IconButton(
+    return IconButton.filledTonal(
       tooltip: offline ? "Can't call while offline" : 'Video call',
-      icon: const Icon(Icons.videocam_outlined),
+      icon: const Icon(Icons.videocam_rounded),
       onPressed: peer == null || busy || offline
           ? null
           : () => context.read<CallBloc>().add(CallStarted(peer)),
@@ -115,29 +128,36 @@ class _MessageList extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (state.status == ChatStatus.failure) {
-          return Center(child: Text(state.error ?? 'Something went wrong.'));
+          return EmptyState(
+            icon: Icons.error_outline_rounded,
+            title: "Couldn't load messages",
+            text: state.error ?? 'Something went wrong.',
+          );
         }
         if (state.messages.isEmpty) {
-          return Center(
-            child: Text(
-              'Say hi to ${state.peer?.name ?? 'them'} 👋',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
+          return EmptyState(
+            icon: Icons.waving_hand_outlined,
+            title: 'Say hi to ${state.peer?.name ?? 'them'}',
+            text: 'Send a message or start a video call.',
           );
         }
         final messages = state.messages.reversed.toList();
         return ListView.builder(
           reverse: true,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           itemCount: messages.length,
           itemBuilder: (context, i) {
             final m = messages[i];
             final older = i + 1 < messages.length ? messages[i + 1] : null;
             final showDay = older == null || !_sameDay(older.time, m.time);
+            final groupStart = showDay || older.isMine != m.isMine || older.kind != m.kind;
             return Column(
               children: [
                 if (showDay) _DayChip(m.time),
-                _Bubble(message: m),
+                Padding(
+                  padding: EdgeInsets.only(top: groupStart ? 8 : 0),
+                  child: _Bubble(message: m),
+                ),
               ],
             );
           },
@@ -156,6 +176,7 @@ class _DayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final d = DateTime(day.year, day.month, day.day);
@@ -166,7 +187,17 @@ class _DayChip extends StatelessWidget {
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Chip(label: Text(label), visualDensity: VisualDensity.compact),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ),
     );
   }
 }
@@ -177,39 +208,37 @@ class _Bubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final mine = message.isMine;
     final failed = message.status == MessageStatus.failed;
 
-    if (message.kind == MessageKind.call) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.videocam_outlined, size: 16, color: scheme.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Text(
-              '${message.body} · ${formatClock(message.time)}',
-              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
-            ),
-          ],
-        ),
-      );
-    }
+    if (message.kind == MessageKind.call) return _CallLog(message: message);
 
+    final textColor = mine ? Colors.white : scheme.onSurface;
+    final metaColor = mine ? Colors.white.withValues(alpha: 0.75) : scheme.onSurfaceVariant;
     final bubble = Container(
       constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.75),
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: const EdgeInsets.fromLTRB(12, 8, 10, 6),
+      margin: const EdgeInsets.symmetric(vertical: 1.5),
+      padding: const EdgeInsets.fromLTRB(14, 9, 12, 7),
       decoration: BoxDecoration(
-        color: mine ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+        gradient: mine ? AppTheme.brandGradient : null,
+        color: mine ? null : AppTheme.raised(scheme),
         borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(16),
-          topRight: const Radius.circular(16),
-          bottomLeft: Radius.circular(mine ? 16 : 4),
-          bottomRight: Radius.circular(mine ? 4 : 16),
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
+          bottomLeft: Radius.circular(mine ? 20 : 6),
+          bottomRight: Radius.circular(mine ? 6 : 20),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: mine
+                ? const Color(0xFF4F46E5).withValues(alpha: 0.18)
+                : scheme.shadow.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -217,16 +246,13 @@ class _Bubble extends StatelessWidget {
         children: [
           SelectableText(
             message.body,
-            style: TextStyle(color: mine ? scheme.onPrimaryContainer : scheme.onSurface),
+            style: theme.textTheme.bodyLarge?.copyWith(color: textColor, height: 1.3),
           ),
           const SizedBox(height: 2),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                formatClock(message.time),
-                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-              ),
+              Text(formatClock(message.time), style: TextStyle(fontSize: 11, color: metaColor)),
               if (mine) ...[const SizedBox(width: 4), _StatusIcon(message.status)],
             ],
           ),
@@ -238,11 +264,65 @@ class _Bubble extends StatelessWidget {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: failed
           ? InkWell(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               onTap: () => context.read<ChatBloc>().add(ChatRetryPressed(message.id)),
               child: Tooltip(message: 'Not sent. Tap to retry.', child: bubble),
             )
           : bubble,
+    );
+  }
+}
+
+/// Centered pill for call events ("Outgoing video call · 3:12", "Missed video call").
+class _CallLog extends StatelessWidget {
+  const _CallLog({required this.message});
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Connected calls carry a duration ("… · 3:12"); everything else didn't connect.
+    final connected = message.body.contains('·');
+    final accent = connected ? scheme.primary : scheme.error;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+          decoration: BoxDecoration(
+            color: AppTheme.raised(scheme),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 13,
+                backgroundColor: accent.withValues(alpha: 0.12),
+                child: Icon(
+                  connected ? Icons.videocam_rounded : Icons.missed_video_call_rounded,
+                  size: 16,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  message.body,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                formatClock(message.time),
+                style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -253,13 +333,13 @@ class _StatusIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final muted = Colors.white.withValues(alpha: 0.75);
     final (icon, color, label) = switch (status) {
-      MessageStatus.pending => (Icons.schedule, scheme.onSurfaceVariant, 'Sending'),
-      MessageStatus.failed => (Icons.error_outline, scheme.error, 'Not sent'),
-      MessageStatus.sent => (Icons.done, scheme.onSurfaceVariant, 'Sent'),
-      MessageStatus.delivered => (Icons.done_all, scheme.onSurfaceVariant, 'Delivered'),
-      MessageStatus.read => (Icons.done_all, Colors.lightBlue, 'Read'),
+      MessageStatus.pending => (Icons.schedule, muted, 'Sending'),
+      MessageStatus.failed => (Icons.error_outline, const Color(0xFFFFB4AB), 'Not sent'),
+      MessageStatus.sent => (Icons.done, muted, 'Sent'),
+      MessageStatus.delivered => (Icons.done_all, muted, 'Delivered'),
+      MessageStatus.read => (Icons.done_all, const Color(0xFF7DF9FF), 'Read'),
     };
     return Icon(icon, size: 15, color: color, semanticLabel: label);
   }
@@ -305,8 +385,9 @@ class _ComposerState extends State<_Composer> {
   @override
   Widget build(BuildContext context) {
     final ready = context.select((ChatBloc b) => b.state.peer != null);
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 8, 12),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -319,25 +400,74 @@ class _ComposerState extends State<_Composer> {
               maxLines: 5,
               maxLength: 4000,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Message',
                 counterText: '',
                 isDense: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(24))),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                filled: true,
+                fillColor: AppTheme.raised(scheme),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                border: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(24)),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: const BorderRadius.all(Radius.circular(24)),
+                  borderSide: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: const BorderRadius.all(Radius.circular(24)),
+                  borderSide: BorderSide(color: scheme.primary, width: 1.5),
+                ),
               ),
             ),
           ),
           const SizedBox(width: 8),
           ValueListenableBuilder(
             valueListenable: _controller,
-            builder: (context, value, _) => IconButton.filled(
-              tooltip: 'Send',
-              onPressed: ready && value.text.trim().isNotEmpty ? _send : null,
-              icon: const Icon(Icons.send),
-            ),
+            builder: (context, value, _) {
+              final canSend = ready && value.text.trim().isNotEmpty;
+              return _SendButton(onPressed: canSend ? _send : null);
+            },
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Round gradient send button; greys out when there's nothing to send.
+class _SendButton extends StatelessWidget {
+  const _SendButton({required this.onPressed});
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: 'Send',
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: enabled ? AppTheme.brandGradient : null,
+          color: enabled ? null : scheme.surfaceContainerHighest,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: Icon(
+              Icons.send_rounded,
+              size: 22,
+              color: enabled ? Colors.white : scheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+        ),
       ),
     );
   }

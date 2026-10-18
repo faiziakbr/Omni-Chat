@@ -55,6 +55,7 @@ class _RegisterViewState extends State<RegisterView> {
         ..showSnackBar(SnackBar(content: Text(state.error ?? 'Registration failed'))),
       child: AuthScaffold(
         title: 'Create your account',
+        subtitle: 'It only takes a minute. Friends find you by your email.',
         child: Form(
           key: _formKey,
           child: AutofillGroup(
@@ -63,7 +64,10 @@ class _RegisterViewState extends State<RegisterView> {
               children: [
                 TextFormField(
                   controller: _name,
-                  decoration: const InputDecoration(labelText: 'Name'),
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
                   textCapitalization: TextCapitalization.words,
                   autofillHints: const [AutofillHints.name],
                   textInputAction: TextInputAction.next,
@@ -72,38 +76,32 @@ class _RegisterViewState extends State<RegisterView> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _email,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.alternate_email),
+                  ),
                   keyboardType: TextInputType.emailAddress,
                   autofillHints: const [AutofillHints.email],
                   textInputAction: TextInputAction.next,
                   validator: validateEmail,
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                PasswordField(
                   controller: _password,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
                   autofillHints: const [AutofillHints.newPassword],
-                  onFieldSubmitted: (_) => _submit(),
-                  validator: validatePassword,
+                  onSubmitted: _submit,
                 ),
                 const SizedBox(height: 24),
                 BlocSelector<AuthFormBloc, AuthFormState, bool>(
                   selector: (s) => s.isSubmitting,
-                  builder: (context, submitting) => FilledButton(
-                    onPressed: submitting ? null : _submit,
-                    child: submitting
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Register'),
-                  ),
+                  builder: (context, submitting) =>
+                      SubmitButton(label: 'Create account', busy: submitting, onPressed: _submit),
                 ),
                 const SizedBox(height: 12),
-                TextButton(
+                SwitchLink(
+                  prompt: 'Already have an account?',
+                  action: 'Log in',
                   onPressed: () => context.go('/login'),
-                  child: const Text('Already have an account? Log in'),
                 ),
               ],
             ),

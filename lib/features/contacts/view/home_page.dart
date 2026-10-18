@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme.dart';
 import '../../../core/time_format.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/data/app_user.dart';
@@ -36,13 +38,17 @@ class HomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final me = context.read<AppUser>();
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Omni Chat'),
+        toolbarHeight: 72,
+        titleSpacing: 20,
+        title: Text('Chats', style: theme.textTheme.headlineMedium),
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Account',
-            icon: UserAvatar(name: me.name, radius: 16),
+            offset: const Offset(0, 52),
+            icon: UserAvatar(name: me.name, radius: 18),
             onSelected: (v) {
               if (v == 'logout') context.read<AuthBloc>().add(const AuthLogoutPressed());
             },
@@ -51,7 +57,8 @@ class HomeView extends StatelessWidget {
                 enabled: false,
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(me.name),
+                  leading: UserAvatar(name: me.name, radius: 20),
+                  title: Text(me.name, style: theme.textTheme.titleMedium),
                   subtitle: Text(me.email),
                 ),
               ),
@@ -66,12 +73,12 @@ class HomeView extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/search'),
-        icon: const Icon(Icons.person_search),
+        icon: const Icon(Icons.add_comment_outlined),
         label: const Text('New chat'),
       ),
       body: BlocBuilder<ContactsBloc, ContactsState>(
@@ -81,31 +88,43 @@ class HomeView extends StatelessWidget {
             case ContactsStatus.loading:
               return const Center(child: CircularProgressIndicator());
             case ContactsStatus.failure:
-              return const _Empty(
-                icon: Icons.cloud_off,
-                text: "Couldn't load your chats. Check your connection.",
+              return const EmptyState(
+                icon: Icons.cloud_off_rounded,
+                title: "Couldn't load your chats",
+                text: 'Check your connection and try again.',
               );
             case ContactsStatus.success:
               if (state.contacts.isEmpty) {
-                return const _Empty(
-                  icon: Icons.forum_outlined,
-                  text: 'No chats yet.\nTap "New chat" to find someone by email.',
+                return EmptyState(
+                  icon: Icons.forum_rounded,
+                  title: 'No chats yet',
+                  text: 'Find a friend by their email to start chatting and video calling.',
+                  action: FilledButton.icon(
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                    onPressed: () => context.push('/search'),
+                    icon: const Icon(Icons.person_search_outlined),
+                    label: const Text('Find someone'),
+                  ),
                 );
               }
               final contacts = state.sortedContacts;
-              return ListView.separated(
-                padding: const EdgeInsets.only(bottom: 88),
-                itemCount: contacts.length,
-                separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-                itemBuilder: (context, i) {
-                  final c = contacts[i];
-                  return _ContactTile(
-                    contact: c,
-                    online: state.isOnline(c.uid),
-                    summary: state.summaries[c.uid],
-                    lastSeen: state.presence[c.uid]?.lastSeen,
-                  );
-                },
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 96),
+                    itemCount: contacts.length,
+                    itemBuilder: (context, i) {
+                      final c = contacts[i];
+                      return _ContactTile(
+                        contact: c,
+                        online: state.isOnline(c.uid),
+                        summary: state.summaries[c.uid],
+                        lastSeen: state.presence[c.uid]?.lastSeen,
+                      );
+                    },
+                  ),
+                ),
               );
           }
         },
@@ -129,66 +148,90 @@ class _ContactTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final last = summary?.last;
     final unread = summary?.unread ?? 0;
     final subtitle = switch (last) {
       null => online ? 'online' : formatLastSeen(lastSeen),
-      ChatMessage(kind: MessageKind.call) => '📹 ${last.body}',
-      ChatMessage(isMine: true) => 'You: ${last.body}',
+      ChatMessage(isMine: true, kind: MessageKind.text) => 'You: ${last.body}',
       _ => last.body,
     };
-    return ListTile(
-      leading: UserAvatar(name: contact.name, online: online),
-      title: Text(contact.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: unread > 0 ? const TextStyle(fontWeight: FontWeight.w600) : null,
-      ),
-      trailing: last == null
-          ? null
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  formatClock(last.time),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: unread > 0 ? scheme.primary : scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                if (unread > 0) Badge.count(count: unread, backgroundColor: scheme.primary),
-              ],
-            ),
-      onTap: () => context.push('/chat/${contact.uid}', extra: contact),
+    final subtitleStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: unread > 0 ? scheme.onSurface : scheme.onSurfaceVariant,
+      fontWeight: unread > 0 ? FontWeight.w600 : null,
     );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Center(
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => context.push('/chat/${contact.uid}', extra: contact),
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
           children: [
-            Icon(icon, size: 48, color: color),
-            const SizedBox(height: 12),
-            Text(
-              text,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: color),
+            UserAvatar(name: contact.name, online: online, radius: 27),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          contact.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      if (last != null)
+                        Text(
+                          formatClock(last.time),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: unread > 0 ? scheme.primary : scheme.onSurfaceVariant,
+                            fontWeight: unread > 0 ? FontWeight.w700 : null,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (last?.kind == MessageKind.call) ...[
+                        Icon(Icons.videocam_outlined, size: 16, color: scheme.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                      ],
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: subtitleStyle,
+                        ),
+                      ),
+                      if (unread > 0)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          constraints: const BoxConstraints(minWidth: 22),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.brandGradient,
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: Text(
+                            unread > 99 ? '99+' : '$unread',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

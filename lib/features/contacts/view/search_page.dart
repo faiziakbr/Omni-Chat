@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../auth/data/app_user.dart';
 import '../../auth/view/auth_scaffold.dart' show validateEmail;
@@ -55,12 +56,12 @@ class _SearchViewState extends State<SearchView> {
         context.pushReplacement('/chat/${peer.uid}', extra: Contact.fromUser(peer));
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Find someone')),
+        appBar: AppBar(title: const Text('New chat')),
         body: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               children: [
                 Form(
                   key: _formKey,
@@ -72,12 +73,18 @@ class _SearchViewState extends State<SearchView> {
                     onFieldSubmitted: (_) => _submit(),
                     validator: validateEmail,
                     decoration: InputDecoration(
-                      labelText: 'Email address',
-                      hintText: 'friend@example.com',
-                      suffixIcon: IconButton(
-                        tooltip: 'Search',
-                        icon: const Icon(Icons.search),
-                        onPressed: _submit,
+                      hintText: 'Search by email address',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: IconButton.filled(
+                          tooltip: 'Search',
+                          icon: Icon(
+                            Icons.arrow_forward,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                          onPressed: _submit,
+                        ),
                       ),
                     ),
                   ),
@@ -86,11 +93,24 @@ class _SearchViewState extends State<SearchView> {
                 BlocBuilder<UserSearchBloc, UserSearchState>(
                   builder: (context, state) => switch (state.status) {
                     UserSearchStatus.initial => const _Hint(
-                      'Enter the exact email your friend registered with.',
+                      icon: Icons.person_search_rounded,
+                      title: 'Find a friend',
+                      text: 'Enter the exact email your friend signed up with.',
                     ),
-                    UserSearchStatus.searching => const Center(child: CircularProgressIndicator()),
-                    UserSearchStatus.notFound => const _Hint('No user with that email.'),
-                    UserSearchStatus.failure => _Hint(state.error ?? 'Search failed.'),
+                    UserSearchStatus.searching => const Padding(
+                      padding: EdgeInsets.only(top: 48),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    UserSearchStatus.notFound => const _Hint(
+                      icon: Icons.search_off_rounded,
+                      title: 'No one found',
+                      text: 'Check the spelling, or ask your friend to create an account first.',
+                    ),
+                    UserSearchStatus.failure => _Hint(
+                      icon: Icons.error_outline_rounded,
+                      title: 'Search failed',
+                      text: state.error ?? 'Something went wrong. Try again.',
+                    ),
                     UserSearchStatus.found ||
                     UserSearchStatus.linking ||
                     UserSearchStatus.linked => _ResultCard(
@@ -115,19 +135,32 @@ class _ResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: UserAvatar(name: user.name),
-        title: Text(user.name),
-        subtitle: Text(user.email),
-        trailing: FilledButton.tonalIcon(
-          style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
-          onPressed: busy
-              ? null
-              : () => context.read<UserSearchBloc>().add(const UserSearchStartChatPressed()),
-          icon: const Icon(Icons.chat_bubble_outline),
-          label: const Text('Message'),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            UserAvatar(name: user.name, radius: 40),
+            const SizedBox(height: 16),
+            Text(user.name, style: theme.textTheme.titleLarge, textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            Text(
+              user.email,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : () => context.read<UserSearchBloc>().add(const UserSearchStartChatPressed()),
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('Start chatting'),
+            ),
+          ],
         ),
       ),
     );
@@ -135,13 +168,14 @@ class _ResultCard extends StatelessWidget {
 }
 
 class _Hint extends StatelessWidget {
-  const _Hint(this.text);
+  const _Hint({required this.icon, required this.title, required this.text});
+  final IconData icon;
+  final String title;
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(
-    text,
-    textAlign: TextAlign.center,
-    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 24),
+    child: EmptyState(icon: icon, title: title, text: text),
   );
 }

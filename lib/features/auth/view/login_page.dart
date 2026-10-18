@@ -51,6 +51,7 @@ class _LoginViewState extends State<LoginView> {
         ..showSnackBar(SnackBar(content: Text(state.error ?? 'Login failed'))),
       child: AuthScaffold(
         title: 'Welcome back',
+        subtitle: 'Log in to chat and video call your friends.',
         child: Form(
           key: _formKey,
           child: AutofillGroup(
@@ -59,38 +60,32 @@ class _LoginViewState extends State<LoginView> {
               children: [
                 TextFormField(
                   controller: _email,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.alternate_email),
+                  ),
                   keyboardType: TextInputType.emailAddress,
                   autofillHints: const [AutofillHints.email],
                   textInputAction: TextInputAction.next,
                   validator: validateEmail,
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                PasswordField(
                   controller: _password,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
                   autofillHints: const [AutofillHints.password],
-                  onFieldSubmitted: (_) => _submit(),
-                  validator: validatePassword,
+                  onSubmitted: _submit,
                 ),
                 const SizedBox(height: 24),
                 BlocSelector<AuthFormBloc, AuthFormState, bool>(
                   selector: (s) => s.isSubmitting,
-                  builder: (context, submitting) => FilledButton(
-                    onPressed: submitting ? null : _submit,
-                    child: submitting
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Log in'),
-                  ),
+                  builder: (context, submitting) =>
+                      SubmitButton(label: 'Log in', busy: submitting, onPressed: _submit),
                 ),
                 const SizedBox(height: 12),
-                TextButton(
+                SwitchLink(
+                  prompt: "Don't have an account?",
+                  action: 'Create one',
                   onPressed: () => context.go('/register'),
-                  child: const Text("Don't have an account? Register"),
                 ),
               ],
             ),

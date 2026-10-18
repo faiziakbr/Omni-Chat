@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/stream_listenable.dart';
+import '../core/widgets/brand_mark.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/view/login_page.dart';
 import '../features/auth/view/register_page.dart';
@@ -29,7 +30,7 @@ GoRouter buildRouter(AuthBloc authBloc) {
     routes: [
       GoRoute(
         path: '/splash',
-        builder: (_, _) => const Scaffold(body: Center(child: CircularProgressIndicator())),
+        builder: (_, _) => const Scaffold(body: Center(child: BrandMark(size: 88))),
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),

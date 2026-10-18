@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -105,15 +106,21 @@ class _CallScreenState extends State<CallScreen> {
                   children: [
                     const SizedBox(height: 32),
                     if (!showRemote) ...[
-                      UserAvatar(name: state.peerName, radius: 48),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
+                      _PulsingAvatar(
+                        name: state.peerName,
+                        pulsing:
+                            state.phase == CallPhase.outgoing || state.phase == CallPhase.incoming,
+                      ),
+                      const SizedBox(height: 28),
                     ],
                     Text(
                       state.peerName,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -144,13 +151,101 @@ class _Backdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return const DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Theme.of(context).colorScheme.primary.withValues(alpha: 0.6), Colors.black],
+          colors: [Color(0xFF312E81), Color(0xFF1E1B4B), Color(0xFF0B0B1A)],
+          stops: [0, 0.45, 1],
         ),
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0, -0.45),
+            radius: 0.9,
+            colors: [Color(0x668B5CF6), Color(0x008B5CF6)],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Large avatar with soft rings rippling out while the call is ringing.
+class _PulsingAvatar extends StatefulWidget {
+  const _PulsingAvatar({required this.name, required this.pulsing});
+  final String name;
+  final bool pulsing;
+
+  @override
+  State<_PulsingAvatar> createState() => _PulsingAvatarState();
+}
+
+class _PulsingAvatarState extends State<_PulsingAvatar> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.pulsing) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(_PulsingAvatar old) {
+    super.didUpdateWidget(old);
+    if (widget.pulsing && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.pulsing && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = 56.0;
+    return SizedBox.square(
+      dimension: radius * 3.2,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => Stack(
+          alignment: Alignment.center,
+          children: [
+            if (widget.pulsing)
+              for (final offset in const [0.0, 0.5])
+                _ring(((_controller.value + offset) % 1.0), radius),
+            child!,
+          ],
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white24, width: 4),
+          ),
+          child: UserAvatar(name: widget.name, radius: radius),
+        ),
+      ),
+    );
+  }
+
+  Widget _ring(double t, double radius) {
+    final size = radius * 2 * (1 + t * 0.6);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withValues(alpha: 0.12 * (1 - t)),
       ),
     );
   }
@@ -275,15 +370,17 @@ class _Controls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _RoundButton(
-              icon: Icons.call_end,
+              icon: Icons.call_end_rounded,
               label: 'Decline',
-              color: Colors.red,
+              color: const Color(0xFFEF4444),
+              size: 72,
               onPressed: () => bloc.add(const CallDeclined()),
             ),
             _RoundButton(
-              icon: Icons.videocam,
+              icon: Icons.videocam_rounded,
               label: 'Accept',
-              color: Colors.green,
+              color: const Color(0xFF22C55E),
+              size: 72,
               onPressed: () => bloc.add(const CallAccepted()),
             ),
           ],
@@ -291,52 +388,84 @@ class _Controls extends StatelessWidget {
       case CallPhase.outgoing:
       case CallPhase.connecting:
       case CallPhase.active:
-        return Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 20,
-          runSpacing: 16,
-          children: [
-            _RoundButton(
-              icon: state.micOn ? Icons.mic : Icons.mic_off,
-              label: state.micOn ? 'Mute' : 'Unmute',
-              color: state.micOn ? Colors.white24 : Colors.white,
-              iconColor: state.micOn ? Colors.white : Colors.black,
-              onPressed: () => bloc.add(const CallMicToggled()),
-            ),
-            _RoundButton(
-              icon: state.cameraOn ? Icons.videocam : Icons.videocam_off,
-              label: state.cameraOn ? 'Camera off' : 'Camera on',
-              color: state.cameraOn ? Colors.white24 : Colors.white,
-              iconColor: state.cameraOn ? Colors.white : Colors.black,
-              onPressed: () => bloc.add(const CallCameraToggled()),
-            ),
-            if (!kIsWeb)
+        return _GlassPanel(
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 16,
+            runSpacing: 16,
+            children: [
               _RoundButton(
-                icon: state.speakerOn ? Icons.volume_up : Icons.phone_in_talk,
-                label: state.speakerOn ? 'Speaker' : 'Earpiece',
-                color: state.speakerOn ? Colors.white24 : Colors.white,
-                iconColor: state.speakerOn ? Colors.white : Colors.black,
-                onPressed: () => bloc.add(const CallSpeakerToggled()),
+                icon: state.micOn ? Icons.mic : Icons.mic_off,
+                label: state.micOn ? 'Mute' : 'Unmute',
+                color: state.micOn ? _glass : Colors.white,
+                iconColor: state.micOn ? Colors.white : Colors.black,
+                onPressed: () => bloc.add(const CallMicToggled()),
               ),
-            if (!kIsWeb)
               _RoundButton(
-                icon: Icons.cameraswitch,
-                label: 'Flip',
-                color: Colors.white24,
-                onPressed: () => bloc.add(const CallCameraSwitched()),
+                icon: state.cameraOn ? Icons.videocam : Icons.videocam_off,
+                label: state.cameraOn ? 'Camera off' : 'Camera on',
+                color: state.cameraOn ? _glass : Colors.white,
+                iconColor: state.cameraOn ? Colors.white : Colors.black,
+                onPressed: () => bloc.add(const CallCameraToggled()),
               ),
-            _RoundButton(
-              icon: Icons.call_end,
-              label: 'End',
-              color: Colors.red,
-              onPressed: () => bloc.add(const CallHungUp()),
-            ),
-          ],
+              if (!kIsWeb)
+                _RoundButton(
+                  icon: state.speakerOn ? Icons.volume_up : Icons.phone_in_talk,
+                  label: state.speakerOn ? 'Speaker' : 'Earpiece',
+                  color: state.speakerOn ? _glass : Colors.white,
+                  iconColor: state.speakerOn ? Colors.white : Colors.black,
+                  onPressed: () => bloc.add(const CallSpeakerToggled()),
+                ),
+              if (!kIsWeb)
+                _RoundButton(
+                  icon: Icons.cameraswitch_rounded,
+                  label: 'Flip',
+                  color: _glass,
+                  onPressed: () => bloc.add(const CallCameraSwitched()),
+                ),
+              _RoundButton(
+                icon: Icons.call_end_rounded,
+                label: 'End',
+                color: const Color(0xFFEF4444),
+                onPressed: () => bloc.add(const CallHungUp()),
+              ),
+            ],
+          ),
         );
       case CallPhase.ended:
       case CallPhase.idle:
         return const SizedBox(height: 96);
     }
+  }
+}
+
+const _glass = Color(0x29FFFFFF);
+
+/// Frosted bar behind the in-call controls so they read over any video.
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -347,6 +476,7 @@ class _RoundButton extends StatelessWidget {
     required this.color,
     required this.onPressed,
     this.iconColor = Colors.white,
+    this.size = 58,
   });
 
   final IconData icon;
@@ -354,6 +484,7 @@ class _RoundButton extends StatelessWidget {
   final Color color;
   final Color iconColor;
   final VoidCallback onPressed;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -361,17 +492,20 @@ class _RoundButton extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox.square(
-          dimension: 64,
+          dimension: size,
           child: IconButton.filled(
             tooltip: label,
             style: IconButton.styleFrom(backgroundColor: color, foregroundColor: iconColor),
-            iconSize: 28,
+            iconSize: size * 0.44,
             onPressed: onPressed,
             icon: Icon(icon),
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+        ),
       ],
     );
   }
